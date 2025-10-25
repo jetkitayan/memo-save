@@ -1,0 +1,9 @@
+name = "memo-save-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "memo_save"
+database_id = "9acbaf61-b35c-4614-ac57-111219740bf3"  # ← 後で置き換える
+
