@@ -188,21 +188,53 @@
 
         // 編集ボタン
         div.querySelector(".edit-btn").addEventListener("click", async () => {
-          const newText = prompt("文章を編集", item.text);
-          if (newText === null) return;
-
-          const newCat = prompt("分類を編集（バスケ/生活/仕事/勉強/その他）", item.category || "その他");
-          if (newCat === null) return;
-
-          const resU = await apiFetch(`/api/items/${item.id}`, {
-            method: "PUT",
-            body: JSON.stringify({ text: newText, category: newCat })
+          // 既存テキストを改行付きで編集できるようにする
+          const editor = document.createElement("textarea");
+          editor.value = item.text;
+          editor.style.width = "100%";
+          editor.style.height = "100px";
+          editor.style.marginTop = "8px";
+        
+          const saveBtn = document.createElement("button");
+          saveBtn.textContent = "保存";
+          saveBtn.style.marginTop = "6px";
+        
+          const cancelBtn = document.createElement("button");
+          cancelBtn.textContent = "キャンセル";
+          cancelBtn.style.marginLeft = "6px";
+        
+          // 一時的に編集UIを挿入
+          div.querySelector(".meta").insertAdjacentElement("afterend", editor);
+          div.querySelector(".meta").insertAdjacentElement("afterend", saveBtn);
+          div.querySelector(".meta").insertAdjacentElement("afterend", cancelBtn);
+        
+          cancelBtn.addEventListener("click", () => {
+            editor.remove();
+            saveBtn.remove();
+            cancelBtn.remove();
           });
-          const dataU = await resU.json().catch(() => ({}));
-          if (resU.ok && dataU.ok) await loadList();
-          else alert("更新に失敗しました。");
+        
+          saveBtn.addEventListener("click", async () => {
+            const newText = editor.value;
+            const newCat = prompt("分類を編集（バスケ/生活/仕事/勉強/その他）", item.category || "その他");
+            if (newCat === null) return;
+        
+            const resU = await apiFetch(`/api/items/${item.id}`, {
+              method: "PUT",
+              body: JSON.stringify({ text: newText, category: newCat }),
+            });
+            const dataU = await resU.json().catch(() => ({}));
+            if (resU.ok && dataU.ok) {
+              editor.remove();
+              saveBtn.remove();
+              cancelBtn.remove();
+              await loadList();
+            } else {
+              alert("更新に失敗しました。");
+            }
+          });
         });
-
+        
         // 削除ボタン
         div.querySelector(".del-btn").addEventListener("click", async () => {
           if (!confirm(`#${item.id} を削除しますか？`)) return;
