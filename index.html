@@ -9,15 +9,18 @@
     h1 { margin: 0 0 16px; }
     form, .list { max-width: 720px; }
     textarea { width: 100%; min-height: 120px; padding: 12px; font-size: 16px; }
+    select { padding: 8px 10px; font-size: 15px; border-radius: 6px; }
     button { padding: 10px 16px; font-size: 15px; border-radius: 8px; border: 1px solid #ccc; background:#fff; cursor:pointer; }
     button:hover { background:#f0f0f0; }
-    .toolbar { display:flex; gap:10px; align-items:center; margin: 8px 0 20px; }
+    .toolbar { display:flex; flex-wrap: wrap; gap:10px; align-items:center; margin: 8px 0 20px; }
     .item { background:#fff; border:1px solid #e5e5e5; border-radius:12px; padding:14px; margin:10px 0; }
     .meta { font-size: 12px; color:#666; margin-top:8px; }
-    .row { display:flex; gap:8px; align-items:center; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
     input[type="number"]{ width: 100px; padding: 6px 8px; }
     .right { margin-left: auto; }
     .muted { color:#666; font-size:12px; }
+    .del-btn { margin-left: 10px; border-color:#f33; color:#f33; }
+    .del-btn:hover { background:#fee; }
   </style>
 </head>
 <body>
@@ -26,7 +29,17 @@
   <form id="form">
     <label for="text">文章</label>
     <textarea id="text" placeholder="ここに文章を入力…"></textarea>
+
     <div class="toolbar">
+      <label for="category">分類：</label>
+      <select id="category">
+        <option value="バスケ">バスケ</option>
+        <option value="生活">生活</option>
+        <option value="仕事">仕事</option>
+        <option value="勉強">勉強</option>
+        <option value="その他" selected>その他</option>
+      </select>
+
       <button type="submit">保存する</button>
       <span id="msg"></span>
       <span class="right muted" id="authStatus"></span>
@@ -48,6 +61,7 @@
 
     const form = document.getElementById("form");
     const text = document.getElementById("text");
+    const category = document.getElementById("category");
     const msg = document.getElementById("msg");
     const list = document.getElementById("list");
     const limitInput = document.getElementById("limit");
@@ -115,7 +129,10 @@
         if (!ok) { msg.textContent = "認証が必要です。"; return; }
       }
 
-      const body = { text: text.value.trim() };
+      const body = {
+        text: text.value.trim(),
+        category: category.value
+      };
       if (!body.text) { msg.textContent = "文章が空です。"; return; }
 
       const res = await apiFetch(`/api/items`, {
@@ -157,9 +174,20 @@
         div.className = "item";
         const jst = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
         div.innerHTML = `
-          <div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
-          <div class="meta">#${item.id} / ${jst}</div>`;
+          <div><b>[${escapeHtml(item.category)}]</b> ${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
+          <div class="meta">#${item.id} / ${jst}
+            <button class="del-btn" data-id="${item.id}">削除</button>
+          </div>`;
         list.appendChild(div);
+
+        // 削除ボタンの動作
+        div.querySelector(".del-btn").addEventListener("click", async () => {
+          if (!confirm(`#${item.id} を削除しますか？`)) return;
+          const delRes = await apiFetch(`/api/items/${item.id}`, { method: "DELETE" });
+          const delData = await delRes.json().catch(() => ({}));
+          if (delRes.ok && delData.ok) await loadList();
+          else alert("削除に失敗しました。");
+        });
       }
     }
 
