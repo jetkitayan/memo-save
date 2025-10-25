@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ノート（タイトル＋カテゴリ＋本文）</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin:24px; background:#fafafa; }
+    a.nav { margin-right:12px; }
+    h1 { margin:0 0 16px; }
+    form, .list { max-width: 880px; }
+    textarea { width:100%; min-height:200px; padding:12px; font-size:15px; }
+    input[type="text"] { padding:8px 10px; font-size:15px; }
+    select { padding:8px 10px; font-size:15px; }
+    button { padding:10px 16px; font-size:15px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+    button:hover { background:#f0f0f0; }
+    .toolbar { display:flex; gap:10px; align-items:center; margin:8px 0 20px; flex-wrap:wrap; }
+    .item { background:#fff; border:1px solid #e5e5e5; border-radius:12px; padding:14px; margin:10px 0; }
+    .meta { font-size:12px; color:#666; margin-top:8px; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .right { margin-left:auto; }
+    .muted { color:#666; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="row" style="margin-bottom:8px;">
+    <a class="nav" href="./">メモ（items）</a>
+    <a class="nav" href="./notes.html"><b>ノート（notes）</b></a>
+    <span class="right muted" id="authStatus"></span>
+    <button id="logoutBtn" title="保存済みの認証情報を消す">ログアウト</button>
+  </div>
+
+  <h1>ノート（タイトル＋カテゴリ＋本文）</h1>
+
+  <div class="note-create">
+    <div class="row">
+      <label for="noteTitle">タイトル</label>
+      <input id="noteTitle" type="text" style="flex:1; min-width:240px;">
+      <label for="noteCategory">分類：</label>
+      <select id="noteCategory">
+        <option value="バスケ">バスケ</option>
+        <option value="生活">生活</option>
+        <option value="仕事">仕事</option>
+        <option value="勉強">勉強</option>
+        <option value="その他" selected>その他</option>
+      </select>
+    </div>
+    <div style="margin-top:8px;">
+      <textarea id="noteBody" placeholder="ここに本文（長文OK）"></textarea>
+    </div>
+    <div class="toolbar">
+      <button id="noteCreateBtn">ノート作成</button>
+      <span id="noteMsg"></span>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:6px;">
+    <button id="notesReload">ノート一覧取得</button>
+  </div>
+
+  <div id="notesList" class="list"></div>
+  <div id="noteDetail" class="item" style="display:none; margin-top:16px;"></div>
+
+  <script>
+    // === 設定 ===
+    const API_BASE = "https://memo-save-api.jetkitayan.workers.dev";
+
+    // 認証（既存index.html と同じ仕組み）
+    const authStatus = document.getElementById("authStatus");
+    const logoutBtn = document.getElementById("logoutBtn");
+    let authHeader = localStorage.getItem("memo_auth") || "";
+    function setAuth(u,p){ authHeader="Basic "+btoa(`${u}:${p}`); localStorage.setItem("memo_auth",authHeader); authStatus.textContent="ログイン中（Basic）"; }
+    function clearAuth(){ authHeader=""; localStorage.removeItem("memo_auth"); authStatus.textContent="未ログイン"; }
+    (function initAuth(){ authStatus.textContent = authHeader ? "ログイン中（Basic）" : "未ログイン"; })();
+    logoutBtn.addEventListener("click",()=>{ clearAuth(); alert("ログアウトしました。操作時に再度認証します。"); });
+
+    async function ensureAuthInteractive(){
+      if (authHeader) return true;
+      const u = prompt("ユーザー名"); if (u===null) return false;
+      const p = prompt("パスワード"); if (p===null) return false;
+      setAuth(u,p); return true;
+    }
+    async function apiFetch(path, options={}, retryOn401=true){
+      const headers = { "Content-Type":"application/json", "Authorization": authHeader || "", ...(options.headers||{}) };
+      const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      if (res.status===401 && retryOn401){
+        clearAuth();
+        const ok = await ensureAuthInteractive(); if (!ok) return res;
+        return apiFetch(path, options, false);
+      }
+      return res;
+    }
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+    // === ノートUI ===
+    const noteTitle = document.getElementById("noteTitle");
+    const noteCategory = document.getElementById("noteCategory");
+    const noteBody  = document.getElementById("noteBody");
+    const noteCreateBtn = document.getElementById("noteCreateBtn");
+    const noteMsg   = document.getElementById("noteMsg");
+    const notesReloadBtn = document.getElementById("notesReload");
+    const notesList = document.getElementById("notesList");
+    const noteDetail = document.getElementById("noteDetail");
+
+    // 作成
+    noteCreateBtn.addEventListener("click", async () => {
+      if (!authHeader){ const ok = await ensureAuthInteractive(); if (!ok){ noteMsg.textContent="認証が必要です。"; return; } }
+      const title = noteTitle.value.trim();
+      const category = noteCategory.value;
+      const body = noteBody.value;
+      if (!title){ noteMsg.textContent="タイトルが空です。"; return; }
+      if (!body.trim()){ noteMsg.textContent="本文が空です。"; return; }
+
+      const res = await apiFetch(`/api/notes`, { method:"POST", body: JSON.stringify({ category, title, body }) });
+      const data = await res.json().catch(()=> ({}));
+      if (res.ok && data.ok){
+        noteMsg.textContent = "ノートを作成しました。";
+        noteTitle.value=""; noteBody.value="";
+        await loadNotes();
+      } else {
+        noteMsg.textContent = data.error || `作成に失敗（HTTP ${res.status})`;
+      }
+    });
+
+    // 一覧
+    notesReloadBtn.addEventListener("click", loadNotes);
+    async function loadNotes(){
+      if (!authHeader){ const ok = await ensureAuthInteractive(); if (!ok){ notesList.textContent="認証が必要です。"; return; } }
+      const res = await apiFetch(`/api/notes`);
+      const data = await res.json().catch(()=> ({}));
+      notesList.innerHTML = "";
+
+      if (!res.ok || !data.ok){ notesList.textContent="取得に失敗しました。"; return; }
+      if (!data.notes?.length){ notesList.textContent="ノートはまだありません。"; return; }
+
+      for (const n of data.notes){
+        const div = document.createElement("div");
+        div.className = "item";
+        const jstC = new Date(n.created_at).toLocaleString('ja-JP',{ timeZone:'Asia/Tokyo' });
+        const jstU = new Date(n.updated_at).toLocaleString('ja-JP',{ timeZone:'Asia/Tokyo' });
+        div.innerHTML = `
+          <div><b>[${escapeHtml(n.category)}]</b> ${escapeHtml(n.title)}</div>
+          <div class="meta">#${n.id} / 作成:${jstC} / 最終更新:${jstU}
+            <button class="open-note" data-id="${n.id}" style="margin-left:10px;">開く</button>
+            <button class="del-note" data-id="${n.id}" style="margin-left:6px; border-color:#f33; color:#f33;">削除</button>
+          </div>`;
+        notesList.appendChild(div);
+
+        div.querySelector(".open-note").addEventListener("click", () => openNote(n.id));
+        div.querySelector(".del-note").addEventListener("click", async () => {
+          if (!confirm(`ノート #${n.id} を削除しますか？`)) return;
+          const delRes = await apiFetch(`/api/notes/${n.id}`, { method:"DELETE" });
+          const delData = await delRes.json().catch(()=> ({}));
+          if (delRes.ok && delData.ok){ noteDetail.style.display="none"; await loadNotes(); }
+          else alert("削除に失敗しました。");
+        });
+      }
+    }
+
+    // 詳細
+    async function openNote(id){
+      const res = await apiFetch(`/api/notes/${id}`);
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok || !data.ok){ alert("取得に失敗"); return; }
+
+      const n = data.note;
+      const jstC = new Date(n.created_at).toLocaleString('ja-JP',{ timeZone:'Asia/Tokyo' });
+      const jstU = new Date(n.updated_at).toLocaleString('ja-JP',{ timeZone:'Asia/Tokyo' });
+
+      noteDetail.style.display = "block";
+      noteDetail.innerHTML = `
+        <div class="row">
+          <input id="noteTitleEdit" value="${escapeHtml(n.title)}" style="flex:1; min-width:240px;">
+          <select id="noteCategoryEdit">
+            ${["バスケ","生活","仕事","勉強","その他"].map(opt =>
+              `<option value="${opt}" ${opt===n.category?"selected":""}>${opt}</option>`
+            ).join("")}
+          </select>
+        </div>
+        <div class="meta">#${n.id} / 作成:${jstC} / 最終更新:${jstU}</div>
+        <div style="margin-top:8px;">
+          <textarea id="noteBodyEdit"></textarea>
+        </div>
+        <div class="toolbar">
+          <button id="noteSaveTitle">タイトル保存</button>
+          <button id="noteSaveCategory">分類を保存</button>
+          <button id="noteSaveBody">本文を保存</button>
+        </div>
+      `;
+      document.getElementById("noteBodyEdit").value = n.body;
+
+      document.getElementById("noteSaveTitle").addEventListener("click", async ()=>{
+        const newTitle = (document.getElementById("noteTitleEdit")).value;
+        const r = await apiFetch(`/api/notes/${n.id}`, { method:"PUT", body: JSON.stringify({ title: newTitle }) });
+        const d = await r.json().catch(()=> ({}));
+        if (r.ok && d.ok){ await openNote(n.id); await loadNotes(); } else alert("タイトル更新に失敗");
+      });
+      document.getElementById("noteSaveCategory").addEventListener("click", async ()=>{
+        const newCat = (document.getElementById("noteCategoryEdit")).value;
+        const r = await apiFetch(`/api/notes/${n.id}`, { method:"PUT", body: JSON.stringify({ category: newCat }) });
+        const d = await r.json().catch(()=> ({}));
+        if (r.ok && d.ok){ await openNote(n.id); await loadNotes(); } else alert("分類更新に失敗");
+      });
+      document.getElementById("noteSaveBody").addEventListener("click", async ()=>{
+        const newBody = (document.getElementById("noteBodyEdit")).value;
+        const r = await apiFetch(`/api/notes/${n.id}`, { method:"PUT", body: JSON.stringify({ body: newBody }) });
+        const d = await r.json().catch(()=> ({}));
+        if (r.ok && d.ok){ await openNote(n.id); await loadNotes(); } else alert("本文更新に失敗");
+      });
+    }
+
+    // 初回ロード
+    loadNotes();
+  </script>
+</body>
+</html>
