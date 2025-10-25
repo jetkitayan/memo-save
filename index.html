@@ -131,7 +131,7 @@
 
       const body = {
         text: text.value.trim(),
-        category: category.value
+        category: document.getElementById("category").value   // ← これを含める
       };
       if (!body.text) { msg.textContent = "文章が空です。"; return; }
 
