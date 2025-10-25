@@ -169,18 +169,41 @@
         list.textContent = "登録はまだありません。";
         return;
       }
+      
       for (const item of data.items) {
         const div = document.createElement("div");
         div.className = "item";
-        const jst = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+        const jstCreated = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+        const jstUpdated = new Date(item.updated_at || item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+
         div.innerHTML = `
           <div><b>[${escapeHtml(item.category)}]</b> ${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
-          <div class="meta">#${item.id} / ${jst}
-            <button class="del-btn" data-id="${item.id}">削除</button>
+          <div class="meta">
+            #${item.id} / 作成: ${jstCreated} / 更新: ${jstUpdated}
+            <button class="edit-btn" data-id="${item.id}" style="margin-left:10px;">編集</button>
+            <button class="del-btn" data-id="${item.id}" style="margin-left:6px; border-color:#f33; color:#f33;">削除</button>
           </div>`;
+
         list.appendChild(div);
 
-        // 削除ボタンの動作
+        // 編集ボタン
+        div.querySelector(".edit-btn").addEventListener("click", async () => {
+          const newText = prompt("文章を編集", item.text);
+          if (newText === null) return;
+
+          const newCat = prompt("分類を編集（バスケ/生活/仕事/勉強/その他）", item.category || "その他");
+          if (newCat === null) return;
+
+          const resU = await apiFetch(`/api/items/${item.id}`, {
+            method: "PUT",
+            body: JSON.stringify({ text: newText, category: newCat })
+          });
+          const dataU = await resU.json().catch(() => ({}));
+          if (resU.ok && dataU.ok) await loadList();
+          else alert("更新に失敗しました。");
+        });
+
+        // 削除ボタン
         div.querySelector(".del-btn").addEventListener("click", async () => {
           if (!confirm(`#${item.id} を削除しますか？`)) return;
           const delRes = await apiFetch(`/api/items/${item.id}`, { method: "DELETE" });
