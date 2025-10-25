@@ -16,6 +16,8 @@
     .meta { font-size: 12px; color:#666; margin-top:8px; }
     .row { display:flex; gap:8px; align-items:center; }
     input[type="number"]{ width: 100px; padding: 6px 8px; }
+    .right { margin-left: auto; }
+    .muted { color:#666; font-size:12px; }
   </style>
 </head>
 <body>
@@ -27,6 +29,8 @@
     <div class="toolbar">
       <button type="submit">保存する</button>
       <span id="msg"></span>
+      <span class="right muted" id="authStatus"></span>
+      <button type="button" id="logoutBtn" title="保存してある認証情報を消します">ログアウト</button>
     </div>
   </form>
 
@@ -39,7 +43,7 @@
   <div class="list" id="list"></div>
 
   <script>
-    // ★ あなたのAPIエンドポイント
+    // ★ APIエンドポイント
     const API_BASE = "https://memo-save-api.jetkitayan.workers.dev";
 
     const form = document.getElementById("form");
@@ -48,38 +52,113 @@
     const list = document.getElementById("list");
     const limitInput = document.getElementById("limit");
     const reloadBtn = document.getElementById("reload");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const authStatus = document.getElementById("authStatus");
 
+    // ===== Basic認証まわり =====
+    let authHeader = localStorage.getItem("memo_auth") || "";
+
+    function setAuth(user, pass){
+      authHeader = "Basic " + btoa(`${user}:${pass}`);
+      localStorage.setItem("memo_auth", authHeader);
+      authStatus.textContent = `ログイン中（Basic）`;
+    }
+    function clearAuth(){
+      authHeader = "";
+      localStorage.removeItem("memo_auth");
+      authStatus.textContent = `未ログイン`;
+    }
+    async function ensureAuthInteractive() {
+      if (authHeader) return true;
+      const u = prompt("ユーザー名");
+      if (u === null) return false;
+      const p = prompt("パスワード");
+      if (p === null) return false;
+      setAuth(u, p);
+      return true;
+    }
+
+    async function apiFetch(path, options = {}, retryOn401 = true) {
+      const headers = {
+        "Content-Type": "application/json",
+        "Authorization": authHeader || "",
+        ...(options.headers || {}),
+      };
+      const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      if (res.status === 401 && retryOn401) {
+        clearAuth();
+        const ok = await ensureAuthInteractive();
+        if (!ok) return res;
+        return apiFetch(path, options, false); // 一度だけ再試行
+      }
+      return res;
+    }
+
+    // 初期の認証確認
+    (function initAuth(){
+      if (authHeader) authStatus.textContent = `ログイン中（Basic）`;
+      else authStatus.textContent = `未ログイン`;
+    })();
+
+    logoutBtn.addEventListener("click", () => {
+      clearAuth();
+      alert("ログアウトしました。操作時に再度認証を求めます。");
+    });
+
+    // ===== アプリ処理 =====
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       msg.textContent = "";
+
+      if (!authHeader) {
+        const ok = await ensureAuthInteractive();
+        if (!ok) { msg.textContent = "認証が必要です。"; return; }
+      }
+
       const body = { text: text.value.trim() };
       if (!body.text) { msg.textContent = "文章が空です。"; return; }
 
-      const res = await fetch(`${API_BASE}/api/items`, {
+      const res = await apiFetch(`/api/items`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (data.ok) { msg.textContent = "保存しました。"; text.value = ""; await loadList(); }
-      else { msg.textContent = data.error || "保存に失敗しました。"; }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        msg.textContent = "保存しました。";
+        text.value = "";
+        await loadList();
+      } else {
+        msg.textContent = (data && data.error) ? data.error : `保存に失敗（HTTP ${res.status})`;
+      }
     });
 
     reloadBtn.addEventListener("click", loadList);
 
     async function loadList() {
+      if (!authHeader) {
+        const ok = await ensureAuthInteractive();
+        if (!ok) { list.textContent = "認証が必要です。"; return; }
+      }
       const limit = Number(limitInput.value || 50);
-      const res = await fetch(`${API_BASE}/api/items?limit=${encodeURIComponent(limit)}`);
-      const data = await res.json();
+      const res = await apiFetch(`/api/items?limit=${encodeURIComponent(limit)}`);
+      const data = await res.json().catch(() => ({}));
       list.innerHTML = "";
-      if (!data.ok) { list.textContent = "取得に失敗しました。"; return; }
-      if (data.items.length === 0) { list.textContent = "登録はまだありません。"; return; }
+
+      if (!res.ok || !data.ok) {
+        list.textContent = (data && data.error) ? data.error : `取得に失敗（HTTP ${res.status})`;
+        return;
+      }
+      if (!data.items || data.items.length === 0) {
+        list.textContent = "登録はまだありません。";
+        return;
+      }
       for (const item of data.items) {
         const div = document.createElement("div");
         div.className = "item";
+        const jst = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
         div.innerHTML = `
           <div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
-          <div class="meta">#${item.id} / ${item.created_at}</div>`;
+          <div class="meta">#${item.id} / ${jst}</div>`;
         list.appendChild(div);
       }
     }
