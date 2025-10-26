@@ -124,6 +124,12 @@
         ...(options.headers || {}),
       };
       const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+      // 👇ここを追加（レスポンスを全部ログに出す）
+      const clone = res.clone();
+      const text = await clone.text();
+      console.log("fetch", path, "→", res.status, text);
+      
       if (res.status === 401 && retryOn401) {
         clearAuth();
         const ok = await ensureAuthInteractive();
