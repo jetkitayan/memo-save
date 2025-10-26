@@ -61,6 +61,23 @@
     </label>
   </div>
 
+  <div class="row" style="margin-top:6px; gap:12px;">
+    <button id="notesReload">ノート一覧取得</button>
+  
+    <label>分類：</label>
+    <select id="randNoteCategory">
+      <option value="バスケ">バスケ</option>
+      <option value="生活">生活</option>
+      <option value="仕事">仕事</option>
+      <option value="勉強">勉強</option>
+      <option value="その他">その他</option>
+    </select>
+    <label style="display:flex; gap:6px; align-items:center;">
+      <input type="checkbox" id="randNoteAll"> 全カテゴリから
+    </label>
+    <button id="showRandomNote">ランダム表示</button>
+  </div>
+  
   <div id="notesList" class="list"></div>
   <div id="noteDetail" class="item" style="display:none; margin-top:16px;"></div>
 
