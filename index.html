@@ -54,13 +54,12 @@
     <label style="display:flex; gap:6px; align-items:center;">
       <input type="checkbox" id="showAllItems"> 非表示も含める
     </label>
-    <button id="export">CSV出力</button> <!-- ←追加 -->
+    <button id="export">CSV出力</button>
   </div>
 
   <div class="list" id="list"></div>
 
   <script>
-    // ★ APIエンドポイント
     const API_BASE = "https://memo-save-api.jetkitayan.workers.dev";
 
     const form = document.getElementById("form");
@@ -72,6 +71,8 @@
     const reloadBtn = document.getElementById("reload");
     const logoutBtn = document.getElementById("logoutBtn");
     const authStatus = document.getElementById("authStatus");
+    const exportBtn = document.getElementById("export");
+    const showAllItems = document.getElementById("showAllItems");
 
     // ===== Basic認証まわり =====
     let authHeader = localStorage.getItem("memo_auth") || "";
@@ -107,15 +108,13 @@
         clearAuth();
         const ok = await ensureAuthInteractive();
         if (!ok) return res;
-        return apiFetch(path, options, false); // 一度だけ再試行
+        return apiFetch(path, options, false);
       }
       return res;
     }
 
-    // 初期の認証確認
     (function initAuth(){
-      if (authHeader) authStatus.textContent = `ログイン中（Basic）`;
-      else authStatus.textContent = `未ログイン`;
+      authStatus.textContent = authHeader ? `ログイン中（Basic）` : `未ログイン`;
     })();
 
     logoutBtn.addEventListener("click", () => {
@@ -123,7 +122,7 @@
       alert("ログアウトしました。操作時に再度認証を求めます。");
     });
 
-    // ===== アプリ処理 =====
+    // ===== 保存 =====
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       msg.textContent = "";
@@ -135,7 +134,7 @@
 
       const body = {
         text: text.value.trim(),
-        category: document.getElementById("category").value   // ← これを含める
+        category: category.value
       };
       if (!body.text) { msg.textContent = "文章が空です。"; return; }
 
@@ -153,9 +152,7 @@
       }
     });
 
-    reloadBtn.addEventListener("click", loadList);
-
-    const exportBtn = document.getElementById("export");
+    // ===== CSV出力 =====
     exportBtn.addEventListener("click", async () => {
       if (!authHeader) {
         const ok = await ensureAuthInteractive();
@@ -176,21 +173,22 @@
       a.remove();
       URL.revokeObjectURL(url);
     });
-    
-    const showAllItems = document.getElementById("showAllItems");
-    
+
+    // ===== 一覧 =====
+    reloadBtn.addEventListener("click", loadList);
+
     async function loadList() {
       if (!authHeader) {
         const ok = await ensureAuthInteractive();
         if (!ok) { list.textContent = "認証が必要です。"; return; }
       }
-    
+
       const limit = Number(limitInput.value || 50);
-      const all = showAllItems.checked ? "&all=1" : "";
+      const all = (showAllItems && showAllItems.checked) ? "&all=1" : "";
       const res = await apiFetch(`/api/items?limit=${encodeURIComponent(limit)}${all}`);
       const data = await res.json().catch(() => ({}));
       list.innerHTML = "";
-    
+
       if (!res.ok || !data.ok) {
         list.textContent = (data && data.error) ? data.error : `取得に失敗（HTTP ${res.status})`;
         return;
@@ -199,22 +197,23 @@
         list.textContent = "登録はまだありません。";
         return;
       }
-    
+
       for (const item of data.items) {
         const div = document.createElement("div");
         div.className = "item";
         const jst = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
         const visible = item.status === 1;
-      
+
         div.innerHTML = `
           <div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
           <div class="meta">
-            #${item.id} / ${jst}
+            #${item.id} / ${jst} / [${escapeHtml(item.category || "その他")}]
             <button class="toggle-vis" data-id="${item.id}" style="margin-left:8px;">
               ${visible ? "非表示にする" : "表示にする"}
             </button>
+            <button class="del-btn" data-id="${item.id}">削除</button>
           </div>`;
-      
+
         // 表示/非表示 切り替え
         div.querySelector(".toggle-vis").addEventListener("click", async (e) => {
           const id = Number(e.currentTarget.getAttribute("data-id"));
@@ -227,19 +226,18 @@
           if (r.ok && d.ok) { await loadList(); }
           else alert("表示状態の更新に失敗しました");
         });
-      
-        list.appendChild(div);
-      }
-    }
-        
-        // 削除ボタン
-        div.querySelector(".del-btn").addEventListener("click", async () => {
-          if (!confirm(`#${item.id} を削除しますか？`)) return;
-          const delRes = await apiFetch(`/api/items/${item.id}`, { method: "DELETE" });
+
+        // 削除
+        div.querySelector(".del-btn").addEventListener("click", async (e) => {
+          const id = Number(e.currentTarget.getAttribute("data-id"));
+          if (!confirm(`#${id} を削除しますか？`)) return;
+          const delRes = await apiFetch(`/api/items/${id}`, { method: "DELETE" });
           const delData = await delRes.json().catch(() => ({}));
           if (delRes.ok && delData.ok) await loadList();
           else alert("削除に失敗しました。");
         });
+
+        list.appendChild(div);
       }
     }
 
