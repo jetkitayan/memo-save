@@ -355,6 +355,133 @@
       }
     }
 
+const randomResult  = document.getElementById("randomResult");
+const randCategory  = document.getElementById("randCategory");
+const randAll       = document.getElementById("randAll");
+const showRandomBtn = document.getElementById("showRandom");
+
+randAll.addEventListener("change", () => { randCategory.disabled = randAll.checked; });
+
+function renderRandom(item){
+  randomResult.style.display = "block";
+  randomResult.dataset.id = item.id;
+
+  const jstC = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+  const jstU = new Date(item.updated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+  const visible = item.status === 1;
+  const categories = ["バスケ","生活","仕事","勉強","その他"];
+  const cat = item.category || "その他";
+
+  randomResult.innerHTML = `
+    <div class="view">
+      <div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
+      <div class="meta">
+        #${item.id} / 作成:${jstC} / 最終更新:${jstU} / [${escapeHtml(cat)}]
+        <button id="rndEdit" style="margin-left:8px;">編集</button>
+        <button id="rndReroll" style="margin-left:6px;">もう一回</button>
+        <button id="rndToggle" style="margin-left:6px;">
+          ${visible ? "非表示にする" : "表示にする"}
+        </button>
+        <button id="rndDelete" style="margin-left:6px; border-color:#f33; color:#f33;">削除</button>
+      </div>
+    </div>
+    <div class="edit" style="display:none;">
+      <textarea id="rndText"></textarea>
+      <div class="row">
+        <label>分類：</label>
+        <select id="rndCat">
+          ${categories.map(opt => `<option value="${opt}" ${opt===cat?"selected":""}>${opt}</option>`).join("")}
+        </select>
+        <span class="right">
+          <button id="rndSave">保存</button>
+          <button id="rndCancel">キャンセル</button>
+        </span>
+      </div>
+    </div>
+  `;
+
+  // フォーム初期値
+  document.getElementById("rndText").value = item.text;
+
+  // クリックハンドラ
+  document.getElementById("rndEdit").addEventListener("click", () => {
+    randomResult.querySelector(".view").style.display = "none";
+    randomResult.querySelector(".edit").style.display = "block";
+  });
+  document.getElementById("rndCancel").addEventListener("click", () => {
+    randomResult.querySelector(".edit").style.display = "none";
+    randomResult.querySelector(".view").style.display = "block";
+  });
+
+  document.getElementById("rndSave").addEventListener("click", async () => {
+    const id   = Number(randomResult.dataset.id);
+    const text = document.getElementById("rndText").value;
+    const cat  = document.getElementById("rndCat").value;
+
+    const r = await apiFetch(`/api/items/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ text, category: cat })
+    });
+    const d = await r.json().catch(()=> ({}));
+    if (r.ok && d.ok) {
+      // 最新状態を1件取得して描画し直す
+      const res2 = await apiFetch(`/api/items/${id}`);
+      const data2 = await res2.json().catch(()=> ({}));
+      if (res2.ok && data2.ok) renderRandom(data2.item);
+      await loadList(); // 一覧も更新（updated_at反映）
+    } else {
+      alert("更新に失敗しました");
+    }
+  });
+
+  document.getElementById("rndToggle").addEventListener("click", async () => {
+    const id = Number(randomResult.dataset.id);
+    const nextVal = visible ? 0 : 1;
+    const r = await apiFetch(`/api/items/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: nextVal })
+    });
+    const d = await r.json().catch(()=> ({}));
+    if (r.ok && d.ok) {
+      // 反映後、同じ条件で再抽選（非表示にしたら見えなくなるので）
+      await doReroll();
+      await loadList();
+    } else {
+      alert("表示状態の更新に失敗しました");
+    }
+  });
+
+  document.getElementById("rndDelete").addEventListener("click", async () => {
+    const id = Number(randomResult.dataset.id);
+    if (!confirm(`#${id} を削除しますか？`)) return;
+    const r = await apiFetch(`/api/items/${id}`, { method: "DELETE" });
+    const d = await r.json().catch(()=> ({}));
+    if (r.ok && d.ok) {
+      randomResult.style.display = "none";
+      await loadList();
+    } else {
+      alert("削除に失敗しました");
+    }
+  });
+
+  document.getElementById("rndReroll").addEventListener("click", doReroll);
+}
+
+async function doReroll(){
+  // 直前のUI状態（全カテゴリ or 指定カテゴリ）に従って再抽選
+  const useAll = randAll && randAll.checked;
+  const cat = randCategory ? randCategory.value : "その他";
+  const qs = useAll ? "" : `?category=${encodeURIComponent(cat)}`;
+
+  const res = await apiFetch(`/api/items/random${qs}`);
+  const data = await res.json().catch(()=> ({}));
+  if (res.ok && data.ok) renderRandom(data.item);
+  else {
+    randomResult.style.display = "block";
+    randomResult.textContent = data.error || `再取得に失敗（HTTP ${res.status})`;
+  }
+}
+    
     function escapeHtml(s){
       return s.replace(/[&<>"']/g, (c) => ({
         "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
