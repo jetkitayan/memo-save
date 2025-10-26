@@ -210,29 +210,7 @@
         const ok = await ensureAuthInteractive();
         if (!ok) return;
       }
-    
-      const useAll = randAll.checked;
-      const cat = randCategory.value;
-      // 全カテゴリならパラメータ無しにする（=サーバ側で全カテゴリ扱い）
-      const qs = useAll ? "" : `?category=${encodeURIComponent(cat)}`;
-    
-      const res = await apiFetch(`/api/items/random${qs}`);
-      const data = await res.json().catch(() => ({}));
-    
-      randomResult.innerHTML = "";
-      randomResult.style.display = "block";
-    
-      if (!res.ok || !data.ok) {
-        randomResult.textContent = data.error || `取得に失敗（HTTP ${res.status})`;
-        return;
-      }
-    
-      const item = data.item;
-      const jst  = new Date(item.updated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-      randomResult.innerHTML = `
-        <div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
-        <div class="meta">#${item.id} / 最終更新:${jst} / [${escapeHtml(item.category)}]</div>
-      `;
+      await doReroll();
     });
 
     // ===== 一覧 =====
