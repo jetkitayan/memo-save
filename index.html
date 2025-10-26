@@ -243,7 +243,7 @@
       
         const jstC = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
         const jstU = new Date(item.updated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-        const visible = item.status === 1;
+        const visible = (item.status ?? 1) === 1;
       
         const categories = ["バスケ","生活","仕事","勉強","その他"];
       
