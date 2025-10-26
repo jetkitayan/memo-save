@@ -205,7 +205,8 @@
         const div = document.createElement("div");
         div.className = "item";
       
-        const jst = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+        const jstC = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+        const jstU = new Date(item.updated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
         const visible = item.status === 1;
       
         const categories = ["バスケ","生活","仕事","勉強","その他"];
@@ -214,7 +215,7 @@
           <div class="view">
             <div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
             <div class="meta">
-              #${item.id} / ${jst} / [${escapeHtml(item.category || "その他")}]
+              #${item.id} / 作成:${jstC} / 最終更新:${jstU} / [${escapeHtml(item.category || "その他")}]
               <button class="edit-btn" data-id="${item.id}" style="margin-left:8px;">編集</button>
               <button class="toggle-vis" data-id="${item.id}" style="margin-left:6px;">
                 ${visible ? "非表示にする" : "表示にする"}
@@ -238,9 +239,9 @@
           </div>
         `;
       
-        // 初期値セット（生テキスト）
+        // 初期値（生テキスト）
         div.querySelector(".edit-text").value = item.text;
-      
+  
         // 編集表示切替
         div.querySelector(".edit-btn").addEventListener("click", () => {
           div.querySelector(".view").style.display = "none";
