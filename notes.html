@@ -207,6 +207,36 @@
       }
     }
 
+    // ランダム用の参照
+    const showRandomNoteBtn = document.getElementById("showRandomNote");
+    const randNoteCategory  = document.getElementById("randNoteCategory");
+    const randNoteAll       = document.getElementById("randNoteAll");
+    
+    // 全カテゴリチェックでカテゴリ選択を無効化（見た目の分かりやすさ）
+    randNoteAll.addEventListener("change", () => {
+      randNoteCategory.disabled = randNoteAll.checked;
+    });
+    
+    // ランダム表示ボタン
+    showRandomNoteBtn.addEventListener("click", async () => {
+      if (!authHeader) {
+        const ok = await ensureAuthInteractive();
+        if (!ok) return;
+      }
+      const useAll = randNoteAll.checked;
+      const cat = randNoteCategory.value;
+      const qs = useAll ? "" : `?category=${encodeURIComponent(cat)}`;
+    
+      const res = await apiFetch(`/api/notes/random${qs}`);
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok || !data.ok) {
+        alert(data.error || `取得に失敗（HTTP ${res.status})`);
+        return;
+      }
+      // ★ 既存の詳細編集UIを再利用して、そのまま編集できるようにする
+      await openNote(data.note.id);
+    });
+    
     // 詳細
     async function openNote(id){
       const res = await apiFetch(`/api/notes/${id}`);
