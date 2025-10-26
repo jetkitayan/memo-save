@@ -59,7 +59,24 @@
     </label>
     <button id="export">CSV出力</button>
   </div>
-
+  
+  <div class="row" style="margin-top:16px; margin-bottom:16px;">
+    <label>分類を選択：</label>
+    <select id="randCategory">
+      <option value="バスケ">バスケ</option>
+      <option value="生活">生活</option>
+      <option value="仕事">仕事</option>
+      <option value="勉強">勉強</option>
+      <option value="その他">その他</option>
+    </select>
+    <label style="display:flex; gap:6px; align-items:center; margin-left:8px;">
+      <input type="checkbox" id="randAll"> 全カテゴリから
+    </label>
+    <button id="showRandom">ランダム表示</button>
+  </div>
+  
+  <div id="randomResult" class="item" style="display:none; background:#f7fff7;"></div>
+    
   <div class="list" id="list"></div>
 
   <script>
