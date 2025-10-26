@@ -161,7 +161,8 @@
         const ok = await ensureAuthInteractive();
         if (!ok) { alert("認証が必要です"); return; }
       }
-      const res = await apiFetch(`/api/export_csv`);
+      const all = (showAllItems && showAllItems.checked) ? "?all=1" : "";
+      const res = await apiFetch(`/api/export_csv${all}`);
       if (!res.ok) {
         alert(`エクスポート失敗（HTTP ${res.status}）`);
         return;
