@@ -143,11 +143,15 @@
     });
 
     // 一覧
+    const showAllNotes = document.getElementById("showAllNotes");
+
     notesReloadBtn.addEventListener("click", loadNotes);
     async function loadNotes(){
       if (!authHeader){ const ok = await ensureAuthInteractive(); if (!ok){ notesList.textContent="認証が必要です。"; return; } }
       const res = await apiFetch(`/api/notes`);
       const data = await res.json().catch(()=> ({}));
+      const all = showAllNotes.checked ? "?all=1" : "";
+      const res = await apiFetch(`/api/notes${all}`);
       notesList.innerHTML = "";
 
       if (!res.ok || !data.ok){ notesList.textContent="取得に失敗しました。"; return; }
