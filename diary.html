@@ -413,3 +413,182 @@
   </script>
 </body>
 </html>
+
+<!-- =============================================
+= 以下、Cloudflare D1 + Pages Functions 用 API 一式 =
+= repo 構成案（例）                            =
+=
+=  memo_save/
+=  ├─ functions/
+=  │   └─ api/
+=  │        └─ diary/
+=  │             ├─ create.js   (POST /api/diary/create)
+=  │             ├─ list.js     (GET  /api/diary/list)
+=  │             ├─ update.js   (PUT  /api/diary/update/:id)
+=  │             ├─ toggle.js   (PATCH /api/diary/toggle/:id)
+=  │             └─ random.js   (GET  /api/diary/random)
+=  ├─ public/
+=  │   └─ diary.html  ← このフロント
+=  ├─ wrangler.toml   ← D1 バインディング: DB
+=  └─ migrations/
+=      └─ 001_diary.sql
+============================================= -->
+
+<!--  migrations/001_diary.sql  -->
+<script type="text/plain" data-filename="migrations/001_diary.sql">
+CREATE TABLE IF NOT EXISTS diary (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,              -- YYYY-MM-DD
+  title TEXT,
+  body TEXT NOT NULL,
+  tags TEXT,                       -- JSON 文字列推奨
+  mood TEXT NOT NULL DEFAULT 'okay', -- good / okay / bad
+  favorite INTEGER NOT NULL DEFAULT 0,
+  hidden INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_diary_date ON diary(date DESC);
+CREATE INDEX IF NOT EXISTS idx_diary_hidden ON diary(hidden);
+</script>
+
+<!--  functions/api/diary/_util.js  共通ユーティリティ（任意） -->
+<script type="text/plain" data-filename="functions/api/diary/_util.js">
+export const json = (data, init={}) => new Response(JSON.stringify(data), {headers:{"content-type":"application/json; charset=utf-8"}, ...init});
+export const bad = (message, status=400) => json({ok:false, error: message}, {status});
+export const nowISO = () => new Date().toISOString();
+export const safeBool = (v) => v===true || v===1 || v==='1' || v==='true';
+</script>
+
+<!--  functions/api/diary/create.js  POST /api/diary/create  -->
+<script type="text/plain" data-filename="functions/api/diary/create.js">
+import { json, bad, nowISO } from "../_util.js";
+
+export async function onRequestPost({ request, env }){
+  const db = env.DB; // D1 バインディング
+  let payload;
+  try{ payload = await request.json(); } catch{ return bad("invalid JSON"); }
+  const e = payload?.entry || {};
+  const date = e.date || nowISO().slice(0,10);
+  const title = e.title ?? "";
+  const body = e.body ?? "";
+  if(!body) return bad("body is required");
+  const tags = JSON.stringify(Array.isArray(e.tags)? e.tags : (typeof e.tags==="string" && e.tags.trim()? e.tags.split(",").map(s=>s.trim()) : []));
+  const mood = (e.mood||"okay").toLowerCase();
+  const favorite = e.favorite?1:0;
+  const hidden = e.hidden?1:0;
+  const now = nowISO();
+
+  const stmt = db.prepare(`
+    INSERT INTO diary (date,title,body,tags,mood,favorite,hidden,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).bind(date,title,body,tags,mood,favorite,hidden,now,now);
+  const result = await stmt.run();
+  return json({ ok:true, id: result.lastRowId });
+}
+</script>
+
+<!--  functions/api/diary/list.js  GET /api/diary/list  -->
+<script type="text/plain" data-filename="functions/api/diary/list.js">
+import { json } from "../_util.js";
+
+export async function onRequestGet({ request, env }){
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  const q = (searchParams.get("q")||"").trim();
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+  const includeHidden = searchParams.get("includeHidden") === "1";
+  const limit = Math.min(200, parseInt(searchParams.get("limit")||"100",10));
+  const offset = Math.max(0, parseInt(searchParams.get("offset")||"0",10));
+
+  const db = env.DB;
+  let where = [];
+  let binds = [];
+
+  if(id){ where.push("id = ?"); binds.push(id); }
+  if(q){
+    // title/body/tags を LIKE 検索
+    where.push("(title LIKE ? OR body LIKE ? OR tags LIKE ?)");
+    binds.push(`%${q}%`,`%${q}%`,`%${q}%`);
+  }
+  if(from){ where.push("date >= ?"); binds.push(from); }
+  if(to){ where.push("date <= ?"); binds.push(to); }
+  if(!includeHidden){ where.push("hidden = 0"); }
+
+  const sql = `SELECT * FROM diary ${where.length?`WHERE ${where.join(" AND ")}`:""} ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?`;
+  binds.push(limit, offset);
+  const rows = await db.prepare(sql).bind(...binds).all();
+  return json({ ok:true, items: rows.results || [] });
+}
+</script>
+
+<!--  functions/api/diary/update.js  PUT /api/diary/update/:id  -->
+<script type="text/plain" data-filename="functions/api/diary/update.js">
+import { json, bad, nowISO } from "../_util.js";
+
+export async function onRequestPut({ request, env, params }){
+  const db = env.DB; const id = params?.id;
+  if(!id) return bad("id is required", 400);
+  let payload; try{ payload = await request.json(); } catch{ return bad("invalid JSON"); }
+  const e = payload?.entry || {};
+  const date = e.date; // 任意
+  const title = e.title; // 任意
+  const body = e.body; // 任意
+  const tags = Array.isArray(e.tags)? JSON.stringify(e.tags) : (typeof e.tags==="string"? JSON.stringify(e.tags.split(",").map(s=>s.trim())) : undefined);
+  const mood = e.mood; // 任意
+  const favorite = (e.favorite===undefined? undefined : (e.favorite?1:0));
+  const hidden = (e.hidden===undefined? undefined : (e.hidden?1:0));
+
+  const fields = [];
+  const binds = [];
+  if(date!==undefined){ fields.push("date = ?"); binds.push(date); }
+  if(title!==undefined){ fields.push("title = ?"); binds.push(title); }
+  if(body!==undefined){ fields.push("body = ?"); binds.push(body); }
+  if(tags!==undefined){ fields.push("tags = ?"); binds.push(tags); }
+  if(mood!==undefined){ fields.push("mood = ?"); binds.push(mood); }
+  if(favorite!==undefined){ fields.push("favorite = ?"); binds.push(favorite); }
+  if(hidden!==undefined){ fields.push("hidden = ?"); binds.push(hidden); }
+  fields.push("updated_at = ?"); binds.push(nowISO());
+  if(fields.length===1) return bad("no fields to update");
+
+  const sql = `UPDATE diary SET ${fields.join(",")} WHERE id = ?`;
+  binds.push(id);
+  const result = await db.prepare(sql).bind(...binds).run();
+  return json({ ok:true, changes: result.changes });
+}
+</script>
+
+<!--  functions/api/diary/toggle.js  PATCH /api/diary/toggle/:id  -->
+<script type="text/plain" data-filename="functions/api/diary/toggle.js">
+import { json, bad, nowISO } from "../_util.js";
+
+export async function onRequestPatch({ request, env, params }){
+  const db = env.DB; const id = params?.id; if(!id) return bad("id is required");
+  let body; try{ body = await request.json(); } catch{ body = {}; }
+  const explicit = body?.hidden; // true/false の場合はその値に。未指定ならトグル。
+
+  // 現在値を取得
+  const cur = await db.prepare("SELECT hidden FROM diary WHERE id = ?").bind(id).first();
+  if(!cur) return bad("not found", 404);
+  const next = (explicit===undefined)? (cur.hidden?0:1) : (explicit?1:0);
+
+  const result = await db.prepare("UPDATE diary SET hidden = ?, updated_at = ? WHERE id = ?")
+    .bind(next, nowISO(), id).run();
+  return json({ ok:true, hidden: !!next, changes: result.changes });
+}
+</script>
+
+<!--  functions/api/diary/random.js  GET /api/diary/random  -->
+<script type="text/plain" data-filename="functions/api/diary/random.js">
+import { json } from "../_util.js";
+
+export async function onRequestGet({ request, env }){
+  const { searchParams } = new URL(request.url);
+  const includeHidden = searchParams.get("includeHidden") === "1";
+  const sql = `SELECT * FROM diary ${includeHidden?"":"WHERE hidden = 0"} ORDER BY RANDOM() LIMIT 1`;
+  const row = await env.DB.prepare(sql).first();
+  return json({ ok:true, entry: row || null });
+}
+</script>
+
