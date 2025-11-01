@@ -234,9 +234,14 @@
     async function api(path, opt={}){
       const url = `${API_BASE}${path}`;
       const res = await fetch(url, {...opt, headers:{...headers(), ...(opt.headers||{})}});
-      if(!res.ok){ throw new Error(`${res.status} ${res.statusText}`); }
-      const ct = res.headers.get('content-type')||'';
-      return ct.includes('application/json') ? res.json() : res.text();
+      const text = await res.text();
+      if (!res.ok) {
+        if (res.status === 401) toast('認証エラー：Basic認証を設定してください', false);
+        throw new Error(`API ${res.status}: ${text}`);
+      }
+      return (res.headers.get('content-type')||'').includes('application/json')
+        ? JSON.parse(text)
+        : text;
     }
 
     function toTagsArray(t){
@@ -316,13 +321,20 @@
       }catch(e){ console.error(e); toast('更新に失敗。ローカルに待避します', false); backupLocal('update', {...getForm(), id: currentId}); }
     });
 
-    $('#randomBtn').addEventListener('click', async()=>{
+    $('#randomBtn').addEventListener('click', async ()=>{
       try{
         const data = await api(PATHS.random);
-        const e = data.entry || data; // サーバの返形に合わせる
-        currentId = e.id||null; setForm(e); $('#updateBtn').disabled = !currentId; $('#saveBtn').disabled=!!currentId;
+        const e = data.entry || data;
+        if (!e) { toast('該当データがありません', false); return; }
+        currentId = e.id || null;
+        setForm(e);
+        $('#updateBtn').disabled = !currentId;
+        $('#saveBtn').disabled = !!currentId;
         toast('ランダムに取得しました');
-      }catch(e){ console.error(e); toast('ランダム取得に失敗', false); }
+      }catch(err){
+        console.error(err);
+        toast('ランダム取得に失敗', false);
+      }
     });
 
     $('#searchBtn').addEventListener('click', refresh);
@@ -407,8 +419,14 @@
       if(kind==='update'){ const idx=arr.findIndex(x=>x.id===payload.id); if(idx>=0) arr[idx] = {...arr[idx], ...payload, updatedAt:new Date().toISOString()}; }
       localStorage.setItem(key, JSON.stringify(arr));
     }
-    function restoreLocal(){ try{ const raw = localStorage.getItem('DIARY_LOCAL_BACKUP'); return raw? JSON.parse(raw): []; }catch{ return []; }
 
+    function restoreLocal(){
+      try{
+        const raw = localStorage.getItem('DIARY_LOCAL_BACKUP');
+        return raw ? JSON.parse(raw) : [];
+      }catch{
+        return [];
+      }
     }
 
     // ====== ユーティリティ ======
