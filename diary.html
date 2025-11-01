@@ -239,6 +239,18 @@
       return ct.includes('application/json') ? res.json() : res.text();
     }
 
+    function toTagsArray(t){
+      try{
+        if (Array.isArray(t)) return t;
+        if (typeof t === 'string') {
+          const s = t.trim();
+          if (s.startsWith('[')) return JSON.parse(s);          // JSON文字列
+          if (s.length) return s.split(',').map(v=>v.trim()).filter(Boolean); // カンマ区切り
+        }
+      }catch{}
+      return [];
+    }
+    
     function toast(msg, ok=true){ statusEl.textContent = `${new Date().toLocaleTimeString()}  ${ok?'✓':'✗'} ${msg}`; statusEl.style.color = ok? '#86efac':'#ff9aa2'; }
 
     // ====== 編集フォーム状態 ======
@@ -263,12 +275,12 @@
       $('#f-date').value = e.date || today();
       $('#f-title').value = e.title||'';
       $('#f-body').value = e.body||'';
-      $('#f-tags').value = (e.tags||[]).join(', ');
+      $('#f-tags').value = toTagsArray(e.tags).join(', ');
       $('#f-mood').value = e.mood||'okay';
       setToggle('#f-fav', !!e.favorite);
       setToggle('#f-hide', !!e.hidden);
     }
-
+    
     function setToggle(sel, on){ const el=$(sel); el.classList.toggle('active', !!on); el.style.borderColor = on? '#ffd166':'#262b3a'; }
 
     function clearForm(){ currentId=null; setForm({date:today(), title:'', body:'', tags:[], mood:'okay', favorite:false, hidden:false}); $('#updateBtn').disabled=true; $('#saveBtn').disabled=false; toast('入力欄をクリアしました'); }
@@ -279,15 +291,15 @@
 
     $('#resetBtn').addEventListener('click', clearForm);
 
-    $('#saveBtn').addEventListener('click', async()=>{
+    $('#saveBtn').addEventListener('click', async ()=>{
       try{
         const entry = getForm();
+        if (!entry.body || !entry.body.trim()) { toast('本文を入力してください', false); return; }
         const body = JSON.stringify({entry});
         const data = await api(PATHS.create, {method:'POST', body});
-        currentId = data.id || data.entry?.id || null; // サーバ応答に合わせて調整
+        currentId = data.id || data.entry?.id || null;
         $('#updateBtn').disabled = !currentId;
-        toast('新規保存しました');
-        await refresh();
+        toast('新規保存しました'); await refresh();
       }catch(e){
         console.error(e); toast('保存に失敗。ローカルに待避します', false); backupLocal('create', getForm());
       }
@@ -342,7 +354,7 @@
       for(const e of items){
         const tr = document.createElement('tr');
         tr.className = e.hidden? 'hidden':'';
-        const tagHtml = (e.tags||[]).map(t=>`<span class="pill">#${escapeHtml(t)}</span>`).join(' ');
+        const tagHtml = toTagsArray(e.tags).map(t=>`<span class="pill">#${escapeHtml(t)}</span>`).join(' ');
         tr.innerHTML = `
           <td class="nowrap">${escapeHtml(e.date||'')}</td>
           <td>
