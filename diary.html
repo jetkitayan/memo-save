@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Diary — NOTEクローン（日記作成・一覧・編集・検索）</title>
+  <style>
+    :root{
+      --bg:#0b0c0f; --panel:#14161c; --muted:#a0a6b5; --border:#262b3a; --accent:#4da3ff; --ok:#2ecc71; --warn:#ffb020; --danger:#ff4d4f;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;background:#0b0c0f;color:#e8ecf1}
+    .wrap{max-width:1200px;margin:20px auto;padding:16px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    h1{margin:0;font-size:22px}
+    .muted{color:var(--muted)}
+    .flex{display:flex;gap:12px;flex-wrap:wrap}
+    .card{background:linear-gradient(180deg,#171a22 0%,#111319 100%);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+    .grid{display:grid;grid-template-columns: 1.05fr 1fr; gap:16px}
+    @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
+
+    label{font-size:12px;color:var(--muted)}
+    input[type="text"], input[type="date"], textarea, select{
+      width:100%; background:#0e1016;border:1px solid var(--border); color:#e8ecf1;
+      border-radius:12px; padding:10px 12px; font-size:15px; outline:none;
+    }
+    input:focus, textarea:focus, select:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(77,163,255,.15)}
+    textarea{min-height:220px; resize:vertical}
+
+    .row{display:grid; grid-template-columns: 1fr 1fr; gap:10px}
+    .row3{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px}
+    .row4{display:grid; grid-template-columns: repeat(4,1fr); gap:10px}
+    @media (max-width: 720px){ .row, .row3, .row4{grid-template-columns:1fr} }
+
+    .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;font-weight:700;letter-spacing:.3px;cursor:pointer;color:#0b0c0f}
+    .b-primary{background:var(--accent)}
+    .b-secondary{background:#374155;color:#e8ecf1}
+    .b-ghost{background:transparent;border:1px solid var(--border);color:#e8ecf1}
+    .b-ok{background:var(--ok)} .b-warn{background:var(--warn)} .b-danger{background:var(--danger)}
+
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+
+    table{width:100%; border-collapse:collapse}
+    th, td{border-bottom:1px solid var(--border); padding:10px; text-align:left; vertical-align:top;}
+    th{color:var(--muted); font-weight:600}
+    tr.hidden{opacity:.5}
+    .pill{display:inline-block; padding:3px 8px; border:1px solid var(--border); border-radius:999px; font-size:12px; color:#dfe6f7}
+
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+    .right{justify-content:flex-end}
+    .grow{flex:1}
+    .nowrap{white-space:nowrap}
+    .ellipsis{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+    footer{margin-top:12px;color:var(--muted);font-size:12px}
+
+    .badge{display:inline-grid;place-items:center; width:22px;height:22px;border-radius:999px;border:1px solid var(--border)}
+  </style>
+</head>
+<body>
+  <!--
+    Diary — NOTEクローン（日記）
+    ■ 目的: 既存の「文章保存ミニアプリ（NOTE）」と同じ仕組み（JSONに追記・編集・非表示）で日記を作成/閲覧/編集
+    ■ API について
+      - 既存の fetch(`${API_BASE}${path}`, { ...options, headers }) 方式を踏襲
+      - 下の PATHS を、あなたの既存エンドポイントに合わせて調整してください
+        例) Vercel/Cloudflare/Firebase Functions 等
+
+      PATHS = {
+        list:    '/diary/list',              // GET  ?q&from&to&offset&limit&includeHidden
+        create:  '/diary/create',            // POST {entry}
+        update:  (id)=>`/diary/update/${id}`,// PUT  {entry}
+        toggle:  (id)=>`/diary/toggle/${id}`,// PATCH {hidden:bool}
+        random:  '/diary/random'             // GET  1件返す
+      }
+
+    ■ データモデル（推奨）
+      id: string  // 既存NOTEと同様（サーバ側採番でもOK）
+      date: 'YYYY-MM-DD'
+      title: string
+      body: string (長文)
+      tags: string[]
+      mood: 'good' | 'okay' | 'bad'
+      favorite: boolean
+      hidden: boolean
+      createdAt: ISO-string
+      updatedAt: ISO-string
+
+    ■ 認証
+      AUTH_TOKEN を必要に応じてヘッダに付与（Basic/Bearer等、既存NOTEの仕様に合わせる）
+  -->
+
+  <div class="wrap">
+    <header>
+      <h1>Diary <span class="muted">— NOTEクローン（日記・長文保存）</span></h1>
+      <div class="toolbar right">
+        <button id="exportBtn" class="btn b-ghost">⬇ Export JSON</button>
+        <label class="btn b-ghost" for="importFile">⬆ Import JSON</label>
+        <input id="importFile" type="file" accept="application/json" hidden />
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- 作成 / 編集フォーム -->
+      <section class="card" id="editor">
+        <div class="row">
+          <div>
+            <label>日付</label>
+            <input id="f-date" type="date" />
+          </div>
+          <div>
+            <label>タイトル</label>
+            <input id="f-title" type="text" placeholder="タイトル（任意）" />
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <label>本文</label>
+          <textarea id="f-body" placeholder="今日の出来事・気づき・学び...（長文OK）"></textarea>
+        </div>
+        <div class="row3" style="margin-top:10px">
+          <div>
+            <label>タグ（カンマ区切り）</label>
+            <input id="f-tags" type="text" placeholder="work, fitness, family" />
+          </div>
+          <div>
+            <label>気分</label>
+            <select id="f-mood">
+              <option value="okay">😐 普通</option>
+              <option value="good">😀 良い</option>
+              <option value="bad">😞 いまいち</option>
+            </select>
+          </div>
+          <div>
+            <label>フラグ</label>
+            <div class="flex">
+              <button id="f-fav" class="btn b-ghost" type="button">☆ Favorite</button>
+              <button id="f-hide" class="btn b-ghost" type="button">👁 非表示</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex" style="margin-top:12px">
+          <div class="grow toolbar">
+            <button id="saveBtn" class="btn b-primary">💾 新規保存</button>
+            <button id="updateBtn" class="btn b-ok" disabled>⟳ 上書き保存</button>
+            <button id="resetBtn" class="btn b-secondary">↺ 入力クリア</button>
+          </div>
+          <div class="toolbar">
+            <button id="randomBtn" class="btn b-warn">🎲 ランダム表示</button>
+          </div>
+        </div>
+        <div id="status" class="muted mono" style="margin-top:8px"></div>
+      </section>
+
+      <!-- 検索 / 一覧 -->
+      <section class="card" id="list">
+        <div class="row4">
+          <div>
+            <label>キーワード</label>
+            <input id="q" type="text" placeholder="本文・タイトル・タグ検索" />
+          </div>
+          <div>
+            <label>期間（FROM）</label>
+            <input id="from" type="date" />
+          </div>
+          <div>
+            <label>期間（TO）</label>
+            <input id="to" type="date" />
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <div class="toolbar">
+              <button id="searchBtn" class="btn b-secondary">🔎 検索</button>
+              <button id="showAllBtn" class="btn b-ghost">⤴ すべて</button>
+            </div>
+          </div>
+        </div>
+        <div class="flex" style="margin-top:10px">
+          <div class="toolbar">
+            <button id="toggleHiddenBtn" class="btn b-ghost">👁‍🗨 非表示も含める: <span id="hiddenState">NO</span></button>
+          </div>
+          <div class="grow"></div>
+          <div class="toolbar">
+            <span class="muted">件数: <span id="count">0</span></span>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; max-height:60vh; overflow:auto">
+          <table id="tbl">
+            <thead>
+              <tr>
+                <th class="nowrap">日付</th>
+                <th>タイトル / 本文（冒頭）</th>
+                <th class="nowrap">タグ</th>
+                <th class="nowrap">気分</th>
+                <th class="nowrap">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      保存はサーバー（JSON）に行います。失敗時はブラウザ側に一時保存（ローカルキャッシュ）します。
+    </footer>
+  </div>
+
+  <script>
+    // ====== 設定 ======
+    const API_BASE = localStorage.getItem('DIARY_API_BASE') || 'https://example.com/api'; // ← 既存NOTEの BASE に変更
+    const AUTH_TOKEN = localStorage.getItem('DIARY_AUTH_TOKEN') || '';                  // ← 認証が必要なら設定
+
+    // 既存NOTEのエンドポイントに合わせてここを編集
+    const PATHS = {
+      list: '/diary/list',                       // GET
+      create: '/diary/create',                   // POST
+      update: (id)=>`/diary/update/${id}`,       // PUT
+      toggle: (id)=>`/diary/toggle/${id}`,       // PATCH
+      random: '/diary/random'                    // GET
+    };
+
+    // ====== 共通ヘルパ ======
+    const $ = (s)=>document.querySelector(s);
+    const statusEl = $('#status');
+
+    function headers(){
+      const h = {'Content-Type':'application/json'};
+      if(AUTH_TOKEN) h['Authorization'] = AUTH_TOKEN.startsWith('Bearer ')? AUTH_TOKEN : `Bearer ${AUTH_TOKEN}`;
+      return h;
+    }
+
+    async function api(path, opt={}){
+      const url = `${API_BASE}${path}`;
+      const res = await fetch(url, {...opt, headers:{...headers(), ...(opt.headers||{})}});
+      if(!res.ok){ throw new Error(`${res.status} ${res.statusText}`); }
+      const ct = res.headers.get('content-type')||'';
+      return ct.includes('application/json') ? res.json() : res.text();
+    }
+
+    function toast(msg, ok=true){ statusEl.textContent = `${new Date().toLocaleTimeString()}  ${ok?'✓':'✗'} ${msg}`; statusEl.style.color = ok? '#86efac':'#ff9aa2'; }
+
+    // ====== 編集フォーム状態 ======
+    let currentId = null; // null=新規、文字列=編集
+    let showHidden = false;
+
+    function today(){ const d=new Date(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${d.getFullYear()}-${m}-${dd}`; }
+
+    function getForm(){
+      return {
+        date: $('#f-date').value || today(),
+        title: $('#f-title').value.trim(),
+        body: $('#f-body').value,
+        tags: $('#f-tags').value.split(',').map(s=>s.trim()).filter(Boolean),
+        mood: $('#f-mood').value,
+        favorite: $('#f-fav').classList.contains('active'),
+        hidden: $('#f-hide').classList.contains('active'),
+      };
+    }
+
+    function setForm(e){
+      $('#f-date').value = e.date || today();
+      $('#f-title').value = e.title||'';
+      $('#f-body').value = e.body||'';
+      $('#f-tags').value = (e.tags||[]).join(', ');
+      $('#f-mood').value = e.mood||'okay';
+      setToggle('#f-fav', !!e.favorite);
+      setToggle('#f-hide', !!e.hidden);
+    }
+
+    function setToggle(sel, on){ const el=$(sel); el.classList.toggle('active', !!on); el.style.borderColor = on? '#ffd166':'#262b3a'; }
+
+    function clearForm(){ currentId=null; setForm({date:today(), title:'', body:'', tags:[], mood:'okay', favorite:false, hidden:false}); $('#updateBtn').disabled=true; $('#saveBtn').disabled=false; toast('入力欄をクリアしました'); }
+
+    // ====== イベント ======
+    $('#f-fav').addEventListener('click', ()=> setToggle('#f-fav', !$('#f-fav').classList.contains('active')) );
+    $('#f-hide').addEventListener('click', ()=> setToggle('#f-hide', !$('#f-hide').classList.contains('active')) );
+
+    $('#resetBtn').addEventListener('click', clearForm);
+
+    $('#saveBtn').addEventListener('click', async()=>{
+      try{
+        const entry = getForm();
+        const body = JSON.stringify({entry});
+        const data = await api(PATHS.create, {method:'POST', body});
+        currentId = data.id || data.entry?.id || null; // サーバ応答に合わせて調整
+        $('#updateBtn').disabled = !currentId;
+        toast('新規保存しました');
+        await refresh();
+      }catch(e){
+        console.error(e); toast('保存に失敗。ローカルに待避します', false); backupLocal('create', getForm());
+      }
+    });
+
+    $('#updateBtn').addEventListener('click', async()=>{
+      if(!currentId){ toast('編集対象がありません', false); return; }
+      try{
+        const entry = {...getForm(), id: currentId};
+        const body = JSON.stringify({entry});
+        await api(PATHS.update(currentId), {method:'PUT', body});
+        toast('上書き保存しました');
+        await refresh();
+      }catch(e){ console.error(e); toast('更新に失敗。ローカルに待避します', false); backupLocal('update', {...getForm(), id: currentId}); }
+    });
+
+    $('#randomBtn').addEventListener('click', async()=>{
+      try{
+        const data = await api(PATHS.random);
+        const e = data.entry || data; // サーバの返形に合わせる
+        currentId = e.id||null; setForm(e); $('#updateBtn').disabled = !currentId; $('#saveBtn').disabled=!!currentId;
+        toast('ランダムに取得しました');
+      }catch(e){ console.error(e); toast('ランダム取得に失敗', false); }
+    });
+
+    $('#searchBtn').addEventListener('click', refresh);
+    $('#showAllBtn').addEventListener('click', ()=>{ $('#q').value=''; $('#from').value=''; $('#to').value=''; refresh(); });
+    $('#toggleHiddenBtn').addEventListener('click', ()=>{ showHidden=!showHidden; $('#hiddenState').textContent = showHidden? 'YES':'NO'; refresh(); })
+
+    $('#exportBtn').addEventListener('click', exportJSON);
+    $('#importFile').addEventListener('change', importJSON);
+
+    // ====== 一覧 ======
+    async function refresh(){
+      try{
+        const p = new URLSearchParams();
+        if($('#q').value.trim()) p.set('q', $('#q').value.trim());
+        if($('#from').value) p.set('from', $('#from').value);
+        if($('#to').value)   p.set('to',   $('#to').value);
+        if(showHidden) p.set('includeHidden', '1');
+        const data = await api(PATHS.list + (p.toString()?`?${p.toString()}`:''));
+        const items = data.items || data || [];
+        renderList(items);
+        $('#count').textContent = items.length;
+        toast('一覧を取得しました');
+      }catch(e){ console.error(e); toast('一覧取得に失敗。ローカルから復元します', false); const items = restoreLocal(); renderList(items); $('#count').textContent = items.length; }
+    }
+
+    function renderList(items){
+      const tbody = $('#tbody');
+      tbody.innerHTML = '';
+      for(const e of items){
+        const tr = document.createElement('tr');
+        tr.className = e.hidden? 'hidden':'';
+        const tagHtml = (e.tags||[]).map(t=>`<span class="pill">#${escapeHtml(t)}</span>`).join(' ');
+        tr.innerHTML = `
+          <td class="nowrap">${escapeHtml(e.date||'')}</td>
+          <td>
+            <div class="ellipsis"><b>${escapeHtml(e.title||'(無題)')}</b></div>
+            <div class="ellipsis" style="margin-top:4px;color:#d8deea">${escapeHtml((e.body||'').slice(0,120))}${(e.body||'').length>120?'…':''}</div>
+          </td>
+          <td class="nowrap">${tagHtml}</td>
+          <td class="nowrap">${moodIcon(e.mood)}</td>
+          <td class="nowrap">
+            <div class="flex">
+              <button class="btn b-ghost" data-act="edit" data-id="${e.id}">✎ 編集</button>
+              <button class="btn b-ghost" data-act="toggle" data-id="${e.id}">${e.hidden?'👁 表示':'👁‍🗨 非表示'}</button>
+            </div>
+          </td>`;
+        tbody.appendChild(tr);
+      }
+      tbody.querySelectorAll('button[data-act]').forEach(b=> b.addEventListener('click', onRowAction));
+    }
+
+    async function onRowAction(ev){
+      const btn = ev.currentTarget; const id = btn.dataset.id; const act = btn.dataset.act;
+      if(act==='edit'){
+        try{
+          // NOTE: list endpointが十分ならその場のデータから拾う方が速い。ここでは再取得例。
+          const data = await api(PATHS.list+`?id=${encodeURIComponent(id)}`);
+          const e = (data.items||[])[0] || data.entry || data; currentId = id; setForm(e); $('#updateBtn').disabled=false; $('#saveBtn').disabled=true; toast('編集モードに切替');
+        }catch(e){ console.error(e); toast('編集用データ取得に失敗', false); }
+      }
+      if(act==='toggle'){
+        try{ await api(PATHS.toggle(id), {method:'PATCH', body: JSON.stringify({})}); toast('表示/非表示を切替えました'); refresh(); } catch(e){ console.error(e); toast('切替に失敗', false); }
+      }
+    }
+
+    // ====== 便利機能：エクスポート／インポート（ローカル用） ======
+    function exportJSON(){
+      const data = restoreLocal();
+      const blob = new Blob([JSON.stringify({exportedAt:new Date().toISOString(), items:data}, null, 2)], {type:'application/json'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `diary-export-${Date.now()}.json`; a.click();
+    }
+    async function importJSON(ev){
+      const file = ev.target.files?.[0]; if(!file) return;
+      const text = await file.text();
+      try{ const data = JSON.parse(text); if(Array.isArray(data.items)) { localStorage.setItem('DIARY_LOCAL_BACKUP', JSON.stringify(data.items)); toast('ローカルにインポートしました'); refresh(); } else { toast('JSON形式が不正です', false); } } catch(e){ toast('JSONの読み込みに失敗', false) }
+    }
+
+    // ====== ローカルバックアップ ======
+    function backupLocal(kind, payload){
+      const key='DIARY_LOCAL_BACKUP'; const arr = restoreLocal();
+      if(kind==='create'){ const tempId = `local-${Date.now()}`; arr.unshift({...payload, id: tempId, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()}); }
+      if(kind==='update'){ const idx=arr.findIndex(x=>x.id===payload.id); if(idx>=0) arr[idx] = {...arr[idx], ...payload, updatedAt:new Date().toISOString()}; }
+      localStorage.setItem(key, JSON.stringify(arr));
+    }
+    function restoreLocal(){ try{ const raw = localStorage.getItem('DIARY_LOCAL_BACKUP'); return raw? JSON.parse(raw): []; }catch{ return []; }
+
+    }
+
+    // ====== ユーティリティ ======
+    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+    function moodIcon(m){ return m==='good'? '😀' : (m==='bad'? '😞' : '😐'); }
+
+    // ====== 初期化 ======
+    (function init(){
+      // デフォルト日付
+      $('#f-date').value = today();
+      clearForm();
+      refresh();
+    })();
+  </script>
+</body>
+</html>
