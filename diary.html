@@ -391,8 +391,10 @@
       if(act==='edit'){
         try{
           // NOTE: list endpointが十分ならその場のデータから拾う方が速い。ここでは再取得例。
-          const data = await api(PATHS.list+`?id=${encodeURIComponent(id)}`);
-          const e = (data.items||[])[0] || data.entry || data; currentId = id; setForm(e); $('#updateBtn').disabled=false; $('#saveBtn').disabled=true; toast('編集モードに切替');
+          const data = await api(PATHS.list+`?id=${encodeURIComponent(id)}&includeHidden=1`);
+          const e = (data.items||[])[0] || data.entry || data;
+          if (!e) { toast('記事が見つかりません', false); return; }
+          currentId = id; setForm(e); $('#updateBtn').disabled=false; $('#saveBtn').disabled=true; toast('編集モードに切替');
         }catch(e){ console.error(e); toast('編集用データ取得に失敗', false); }
       }
       if(act==='toggle'){
