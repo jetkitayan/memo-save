@@ -226,7 +226,8 @@
 
     function headers(){
       const h = {'Content-Type':'application/json'};
-      if(AUTH_TOKEN) h['Authorization'] = AUTH_TOKEN.startsWith('Bearer ')? AUTH_TOKEN : `Bearer ${AUTH_TOKEN}`;
+      const basic = localStorage.getItem('DIARY_BASIC'); // "user:pass" を btoa 済みで保存
+      if (basic) h['Authorization'] = `Basic ${basic}`;
       return h;
     }
 
