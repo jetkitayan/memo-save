@@ -323,7 +323,7 @@
 
     $('#randomBtn').addEventListener('click', async ()=>{
       try{
-        const data = await api(PATHS.random);
+        const data = await api(PATHS.random + (showHidden ? '?includeHidden=1' : ''));
         const e = data.entry || data;
         if (!e) { toast('該当データがありません', false); return; }
         currentId = e.id || null;
