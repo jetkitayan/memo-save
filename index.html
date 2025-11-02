@@ -8,7 +8,13 @@
     body { font-family: system-ui, sans-serif; margin: 24px; background:#fafafa; }
     h1 { margin: 0 0 16px; }
     form, .list { max-width: 720px; }
-    textarea { width: 100%; min-height: 120px; padding: 12px; font-size: 16px; }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      font-size: 16px;
+      box-sizing: border-box; /* ← これを追加 */
+    }
     select { padding: 8px 10px; font-size: 15px; border-radius: 6px; }
     button { padding: 10px 16px; font-size: 15px; border-radius: 8px; border: 1px solid #ccc; background:#fff; cursor:pointer; }
     button:hover { background:#f0f0f0; }
