@@ -29,26 +29,28 @@
 <body>
   <h1>メモ保存</h1>
 
+  <div class="toolbar">
+    <label for="category">分類：</label>
+    <select id="category">
+      <option value="バスケ">バスケ</option>
+      <option value="生活">生活</option>
+      <option value="仕事">仕事</option>
+      <option value="勉強">勉強</option>
+      <option value="備忘録">備忘録</option>
+      <option value="その他" selected>その他</option>
+    </select>
+
+    <button type="submit">保存する</button>
+    <span id="msg"></span>
+    <span class="right muted" id="authStatus"></span>
+    <button type="button" id="logoutBtn" title="保存してある認証情報を消します">ログアウト</button>
+  </div>
+  
+  
   <form id="form">
     <label for="text">文章</label>
     <textarea id="text" placeholder="ここに文章を入力…"></textarea>
 
-    <div class="toolbar">
-      <label for="category">分類：</label>
-      <select id="category">
-        <option value="バスケ">バスケ</option>
-        <option value="生活">生活</option>
-        <option value="仕事">仕事</option>
-        <option value="勉強">勉強</option>
-        <option value="備忘録">備忘録</option>
-        <option value="その他" selected>その他</option>
-      </select>
-
-      <button type="submit">保存する</button>
-      <span id="msg"></span>
-      <span class="right muted" id="authStatus"></span>
-      <button type="button" id="logoutBtn" title="保存してある認証情報を消します">ログアウト</button>
-    </div>
   </form>
 
   <div class="row">
