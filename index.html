@@ -261,6 +261,7 @@
     }
 
     // URL パラメータから初期カテゴリを設定 (?category=...)
+    // URL パラメータから初期カテゴリを設定 (?category=...)
     function applyInitialCategoryFromUrl() {
       const params = new URLSearchParams(location.search);
       const cat = params.get("category");
@@ -274,6 +275,11 @@
       category.value = cat;
       if (typeof randCategory !== "undefined" && randCategory) {
         randCategory.value = cat;
+      }
+
+      // ★ 一覧カテゴリフィルタにも反映
+      if (typeof filterCategory !== "undefined" && filterCategory) {
+        filterCategory.value = cat;
       }
     }
 
