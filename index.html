@@ -75,6 +75,15 @@
     </div>
   </form>
 
+  <!-- ★ 分類マスタ編集エリア -->
+  <div class="row" style="margin:8px 0 16px;">
+    <label>分類マスタ：</label>
+    <input id="newCategory" type="text" placeholder="分類名を入力" />
+    <button type="button" id="addCategoryBtn">追加</button>
+    <button type="button" id="resetCategoryBtn">初期状態に戻す</button>
+  </div>
+  <div id="categoryChips" class="row muted" style="margin-bottom:16px; flex-wrap:wrap;"></div>
+  
   <div class="row">
     <label for="limit">一覧の表示件数</label>
     <input id="limit" type="number" value="50" min="1" max="500">
