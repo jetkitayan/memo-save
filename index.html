@@ -414,7 +414,48 @@
         const jstU = new Date(item.updated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
         const visible = (item.status ?? 1) === 1;
       
-        const categories = ["バスケ","生活","仕事","勉強","その他"];
+      // サーバーから取得した item の category もマスタに取り込む
+      for (const it of data.items) {
+        ensureCategoryInList(it.category || "その他");
+      }
+      renderAllCategorySelects();
+      renderCategoryChips();
+
+      for (const item of data.items) {
+        const div = document.createElement("div");
+        div.className = "item";
+      
+        const jstC = new Date(item.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+        const jstU = new Date(item.updated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+        const visible = (item.status ?? 1) === 1;
+      
+        div.innerHTML = `
+          <div class="view">
+            <div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
+            <div class="meta">
+              #${item.id} / 作成:${jstC} / 最終更新:${jstU} / [${escapeHtml(item.category || "その他")}]
+              <button class="edit-btn" data-id="${item.id}" style="margin-left:8px;">編集</button>
+              <button class="toggle-vis" data-id="${item.id}" style="margin-left:6px;">
+                ${visible ? "非表示にする" : "表示にする"}
+              </button>
+              <button class="del-btn" data-id="${item.id}" style="margin-left:6px; border-color:#f33; color:#f33;">削除</button>
+            </div>
+          </div>
+      
+          <div class="edit">
+            <textarea class="edit-text"></textarea>
+            <div class="row">
+              <label>分類：</label>
+              <select class="edit-cat">
+                ${categories.map(opt => `<option value="${opt}" ${opt===(item.category||"その他")?"selected":""}>${opt}</option>`).join("")}
+              </select>
+              <span class="right">
+                <button class="save-btn" data-id="${item.id}">保存</button>
+                <button class="cancel-btn">キャンセル</button>
+              </span>
+            </div>
+          </div>
+        `;
       
         div.innerHTML = `
           <div class="view">
