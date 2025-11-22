@@ -88,6 +88,15 @@
     <label for="limit">一覧の表示件数</label>
     <input id="limit" type="number" value="50" min="1" max="500">
     <button id="reload">一覧取得</button>
+
+    <!-- ★ ここを追加：一覧カテゴリフィルタ -->
+    <label style="display:flex; gap:6px; align-items:center;">
+      一覧カテゴリ：
+      <select id="filterCategory">
+        <option value="">（すべて）</option>
+      </select>
+    </label>
+
     <label style="display:flex; gap:6px; align-items:center;">
       <input type="checkbox" id="showAllItems"> 非表示も含める
     </label>
