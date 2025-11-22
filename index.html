@@ -675,8 +675,14 @@ async function doReroll(){
       }[c]));
     }
 
+    // 初回のカテゴリUI描画（randCategory 定義後）
+    renderAllCategorySelects();
+    renderCategoryChips();
+    applyInitialCategoryFromUrl();
+
     // 初回ロード
     loadList();
+
   </script>
 </body>
 </html>
