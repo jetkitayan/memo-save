@@ -117,6 +117,135 @@
     const API_BASE = "https://memo-save-api.jetkitayan.workers.dev";
 
     const form = document.getElementById("form");
+
+    // ===== 分類マスタ（コンボボックスの自由編集 + URL初期値） =====
+    const DEFAULT_CATEGORIES = ["バスケ","生活","仕事","勉強","備忘録","その他"];
+
+    function loadCategories() {
+      try {
+        const saved = JSON.parse(localStorage.getItem("memo_categories") || "null");
+        if (Array.isArray(saved) && saved.length > 0) {
+          return saved;
+        }
+      } catch (_) {}
+      return [...DEFAULT_CATEGORIES];
+    }
+
+    let categories = loadCategories();
+
+    const newCatInput    = document.getElementById("newCategory");
+    const addCatBtn      = document.getElementById("addCategoryBtn");
+    const resetCatBtn    = document.getElementById("resetCategoryBtn");
+    const catChips       = document.getElementById("categoryChips");
+
+    function saveCategories() {
+      localStorage.setItem("memo_categories", JSON.stringify(categories));
+    }
+
+    function ensureCategoryInList(name) {
+      if (!name) return;
+      if (!categories.includes(name)) {
+        categories.push(name);
+        saveCategories();
+      }
+    }
+
+    function renderCategorySelectOptions(selectEl, selectedValue) {
+      if (!selectEl) return;
+      const current = selectedValue ?? selectEl.value ?? "その他";
+      selectEl.innerHTML = "";
+      categories.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        if (cat === current) opt.selected = true;
+        selectEl.appendChild(opt);
+      });
+    }
+
+    // すべてのコンボボックスの中身を categories から再描画
+    function renderAllCategorySelects() {
+      renderCategorySelectOptions(category, category.value || "その他");
+      if (typeof randCategory !== "undefined") {
+        renderCategorySelectOptions(randCategory, randCategory.value || "その他");
+      }
+    }
+
+    function renderCategoryChips() {
+      if (!catChips) return;
+      catChips.innerHTML = "";
+      categories.forEach(name => {
+        const span = document.createElement("span");
+        span.className = "chip";
+        span.innerHTML = `${escapeHtml(name)} <button type="button" class="chip-del" data-name="${escapeHtml(name)}">×</button>`;
+        catChips.appendChild(span);
+      });
+    }
+
+    // 追加ボタン
+    if (addCatBtn) {
+      addCatBtn.addEventListener("click", () => {
+        const name = (newCatInput.value || "").trim();
+        if (!name) return;
+        if (categories.includes(name)) {
+          alert("すでに存在する分類です。");
+          return;
+        }
+        categories.push(name);
+        saveCategories();
+        renderAllCategorySelects();
+        renderCategoryChips();
+        newCatInput.value = "";
+      });
+    }
+
+    // 初期状態に戻す
+    if (resetCatBtn) {
+      resetCatBtn.addEventListener("click", () => {
+        if (!confirm("分類マスタを初期状態に戻しますか？")) return;
+        categories = [...DEFAULT_CATEGORIES];
+        saveCategories();
+        renderAllCategorySelects();
+        renderCategoryChips();
+      });
+    }
+
+    // チップの×で削除（「その他」は守る）
+    if (catChips) {
+      catChips.addEventListener("click", (e) => {
+        const btn = e.target.closest(".chip-del");
+        if (!btn) return;
+        const name = btn.dataset.name;
+        if (!name) return;
+        if (name === "その他") {
+          alert("「その他」は削除できません。");
+          return;
+        }
+        if (!confirm(`「${name}」を削除しますか？`)) return;
+        categories = categories.filter(c => c !== name);
+        saveCategories();
+        renderAllCategorySelects();
+        renderCategoryChips();
+      });
+    }
+
+    // URL パラメータから初期カテゴリを設定 (?category=...)
+    function applyInitialCategoryFromUrl() {
+      const params = new URLSearchParams(location.search);
+      const cat = params.get("category");
+      if (!cat) return;
+
+      // URLから来た分類をマスタに含める
+      ensureCategoryInList(cat);
+      renderAllCategorySelects();
+
+      // メイン入力・ランダムの初期値をセット
+      category.value = cat;
+      if (typeof randCategory !== "undefined" && randCategory) {
+        randCategory.value = cat;
+      }
+    }
+
     const text = document.getElementById("text");
     const category = document.getElementById("category");
     const msg = document.getElementById("msg");
