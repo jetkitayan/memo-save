@@ -475,7 +475,8 @@
             <div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>
             <div class="meta">
               #${item.id} / 作成:${jstC} / 最終更新:${jstU} / [${escapeHtml(item.category || "その他")}]
-              <button class="edit-btn" data-id="${item.id}" style="margin-left:8px;">編集</button>
+              <button class="copy-btn" data-id="${item.id}" data-text="${escapeHtml(item.text)}" style="margin-left:8px;">コピー</button>
+              <button class="edit-btn" data-id="${item.id}" style="margin-left:6px;">編集</button>
               <button class="toggle-vis" data-id="${item.id}" style="margin-left:6px;">
                 ${visible ? "非表示にする" : "表示にする"}
               </button>
@@ -551,6 +552,21 @@
           if (delRes.ok && delData.ok) await loadList();
           else alert("削除に失敗しました。");
         });
+
+        // コピーボタン
+        const copyBtn = div.querySelector(".copy-btn");
+        if (copyBtn) {
+          copyBtn.addEventListener("click", async () => {
+            try {
+              // item.text はこの for ループのスコープにあるのでそのまま使える
+              await navigator.clipboard.writeText(item.text);
+              msg.textContent = "コピーしました。";  // 画面上メッセージ
+            } catch (err) {
+              console.error(err);
+              alert("コピーに失敗しました");
+            }
+          });
+        }
       
         list.appendChild(div);
       }
