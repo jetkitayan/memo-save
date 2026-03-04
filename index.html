@@ -428,19 +428,35 @@
         const ok = await ensureAuthInteractive();
         if (!ok) { list.textContent = "認証が必要です。"; return; }
       }
-
+    
       const limit = Number(limitInput.value || 50);
-      const all = (showAllItems && showAllItems.checked) ? "&all=1" : "";
-      const res = await apiFetch(`/api/items?limit=${encodeURIComponent(limit)}${all}`);
-      const data = await res.json().catch(() => ({}));
+    
+      // まずは通常取得
+      const qs1 = `?limit=${encodeURIComponent(limit)}` + ((showAllItems?.checked) ? "&all=1" : "");
+      let res = await apiFetch(`/api/items${qs1}`);
+      let data = await res.json().catch(() => ({}));
+    
+      // 0件だったら、非表示込みでもう一回試す（チェックがOFFでも）
+      if (res.ok && data.ok && (!data.items || data.items.length === 0) && !(showAllItems?.checked)) {
+        const qs2 = `?limit=${encodeURIComponent(limit)}&all=1`;
+        const res2 = await apiFetch(`/api/items${qs2}`);
+        const data2 = await res2.json().catch(() => ({}));
+        if (res2.ok && data2.ok && data2.items?.length) {
+          // 取得できた＝全部非表示だった可能性が高い
+          showAllItems.checked = true;
+          res = res2;
+          data = data2;
+        }
+      }
+    
       list.innerHTML = "";
-
+    
       if (!res.ok || !data.ok) {
         list.textContent = (data && data.error) ? data.error : `取得に失敗（HTTP ${res.status})`;
         return;
       }
       if (!data.items || data.items.length === 0) {
-        list.textContent = "登録はまだありません。";
+        list.textContent = "登録はまだありません。（※非表示も含めると表示される場合があります）";
         return;
       }
 
