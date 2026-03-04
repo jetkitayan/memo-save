@@ -370,9 +370,6 @@
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-
-      // ★ 互換：APIが items ではなく memos で返す場合に対応
-      const serverItems = data.items ?? data.memos ?? [];
       
       if (res.ok && data.ok) {
         msg.textContent = "保存しました。";
