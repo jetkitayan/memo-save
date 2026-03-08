@@ -72,7 +72,7 @@
       <span id="msg"></span>
       <span class="right muted" id="authStatus"></span>
       <button type="button" id="logoutBtn" title="保存してある認証情報を消します">ログアウト</button>
-    </div>
+    f</div>
   </form>
 
   <!-- ★ 分類マスタ編集エリア -->
@@ -87,7 +87,9 @@
   <div class="row">
     <label for="limit">一覧の表示件数</label>
     <input id="limit" type="number" value="50" min="1" max="500">
-    <button id="reload">一覧取得</button>
+    <button type="button" id="reload">一覧取得</button>
+    <button type="button" id="export">CSV出力</button>
+    <button type="button" id="showRandom">ランダム表示</button>
 
     <!-- ★ ここを追加：一覧カテゴリフィルタ -->
     <label style="display:flex; gap:6px; align-items:center;">
@@ -435,9 +437,11 @@
       }
     
       const limit = Number(limitInput.value || 50);
-      const all = (showAllItems?.checked) ? "&all=1" : "";
-    
-      const res = await apiFetch(`/api/items?limit=${encodeURIComponent(limit)}${all}`);
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      if (showAllItems?.checked) params.set("all", "1");
+      
+      const res = await apiFetch(`/api/items?${params.toString()}`);
       const data = await res.json().catch(() => ({}));
     
       const serverItemsRaw = data.items ?? data.memos ?? [];
