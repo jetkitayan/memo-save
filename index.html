@@ -294,6 +294,10 @@
     const exportBtn = document.getElementById("export");
     const showAllItems = document.getElementById("showAllItems");
     const filterCategory = document.getElementById("filterCategory");
+
+    filterCategory.addEventListener("change", loadList);
+    showAllItems.addEventListener("change", loadList);
+    limitInput.addEventListener("change", loadList);
     
     // ===== Basic認証まわり =====
     let authHeader = localStorage.getItem("memo_auth") || "";
@@ -436,14 +440,12 @@
       const res = await apiFetch(`/api/items?limit=${encodeURIComponent(limit)}${all}`);
       const data = await res.json().catch(() => ({}));
     
-      // ★ 互換：APIが items ではなく memos で返す場合に対応
-      const serverItemsRaw = data.items ?? data.memos ?? data.memos ?? data.memos; // 保険（重複OK）
+      const serverItemsRaw = data.items ?? data.memos ?? [];
       const serverItems = Array.isArray(serverItemsRaw) ? serverItemsRaw : [];
     
-      // ★ 一覧用に不足フィールドを補完（/api/items が category/status を返さないケース対策）
       const normalized = serverItems.map(it => ({
         ...it,
-        category: it.category ?? "その他",
+        category: (it.category ?? "その他").trim(),
         status: (it.status ?? 1),
       }));
     
@@ -458,8 +460,15 @@
         return;
       }
     
-      // ★ 一覧カテゴリフィルタを適用
-      const filterCat = filterCategory ? filterCategory.value : "";
+      // 先に全件からカテゴリをマスタへ反映
+      for (const it of normalized) {
+        ensureCategoryInList(it.category || "その他");
+      }
+      renderAllCategorySelects();
+      renderCategoryChips();
+    
+      // そのあと絞り込み
+      const filterCat = (filterCategory?.value || "").trim();
       const items = filterCat
         ? normalized.filter(it => (it.category || "その他") === filterCat)
         : normalized;
@@ -468,13 +477,6 @@
         list.textContent = "指定のカテゴリのメモはありません。";
         return;
       }
-    
-      // サーバーから取得した item の category もマスタに取り込む
-      for (const it of items) {
-        ensureCategoryInList(it.category || "その他");
-      }
-      renderAllCategorySelects();
-      renderCategoryChips();
     
       for (const item of items) {
         const div = document.createElement("div");
@@ -573,6 +575,7 @@
         list.appendChild(div);
       }
     }
+        
     function renderRandom(item){
       randomResult.style.display = "block";
       randomResult.dataset.id = item.id;
